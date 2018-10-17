@@ -1,0 +1,123 @@
+version: "3.7"
+services:
+  hadoop:
+    image: hadoop
+    container_name: hadoop
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "1"
+          memory: 2G
+      restart_policy:
+        condition: on-failure
+    hostname: hadoop
+    # user: deploy
+    domainname: gaoge.org
+    environment:
+      HDFS_HOST: hadoop
+      MAPRED_JOBHISTORY_WEBAPP_ADDRESS: hadoop
+      MAPRED_JOBHISTORY_WEBAPP_PORT: 19888
+    volumes:
+      - "/data/hadoop/data:/app/data"
+    links:
+      - mysql:mysql
+    ports:
+      - 9001:9000
+      - 8043:8042
+      - 9871:9870
+      - 10196-10200:10096-10100
+      # - 10197:10097
+      # - 10198:10098
+      # - 10199:10099
+      # - 10101:10100
+      - 11120:11020
+      - 19988:19888
+      - 8088:8088
+    networks:
+      - bdp_network
+
+  visualizer:
+    image: dockersamples/visualizer:stable
+    container_name: visualizer
+    ports:
+      - "8081:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+    networks:
+      - bdp_network
+  
+  mysql:
+    image: mysql
+    container_name: mysql
+    # command: --default-authentication-plugin=mysql_native_password
+    deploy:
+      restart_policy:
+        condition: on-failure
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_USER: bdp
+      MYSQL_PASSWORD: sf123456
+    ports:
+      - "3306:3306"
+    volumes:
+      - "/data/mysql/data:/var/lib/mysql"
+    networks:
+      - bdp_network
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    deploy:
+      restart_policy:
+        condition: on-failure
+    ports:
+      - 8080:8080
+    links:
+      - mysql:mysql
+    networks:
+      - bdp_network
+  es:
+    image: elasticsearch
+    container_name: es
+    ports:
+      - 9200:9200
+      - 9300:9300
+    environment:
+      CLUSTER_NAME: test-cluster
+      NODE_NAME: test-node
+      NODE_DATA: "true"
+      ES_HOST: es
+      ES_PORT: 9200
+    volumes:
+      - "/data/es/data:/app/data"
+    networks:
+      - bdp_network
+
+  kibana:
+    image: kibana
+    container_name: kibana
+    links:
+      - es:es
+    ports:
+      - 5601:5601
+    environment:
+      ES_HOST: http://es:9200
+      KIBANA_HOST: kibana
+      KIBANA_PORT: 5601
+    networks:
+      - bdp_network
+
+networks:
+  bdp_network:
+    driver: bridge
+    name: bdp_network
+    ipam:
+      driver: default
+      config:
+        - subnet: 11.11.0.0/16
+    # gateway: 10.11.0.2
+    # opt: com.docker.network.driver.mtu=1200

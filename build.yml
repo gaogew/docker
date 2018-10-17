@@ -1,0 +1,233 @@
+version: '3'
+services:
+  webapp:
+    build:
+      context: ./dir
+      dockerfile: Dockerfile
+      args:
+        buildno: 1
+      cache_from:
+        - alpine:latest
+      labels:
+        com.example.description: "accounting webapp"
+      shm_size: '2gb'
+      target: prod
+  my_app:
+    image: redis:latest
+    deploy: # version 3 only, only takes effect when deploying to a swarm with docker stack deploy, ignored by docker-compose up and docker-dompose run.
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure  # none, on-failure, any(default)
+        delay: 10s             # how long to wait between restart attempts, specified as a duration default: 0
+        max_attempts: 2        # how many times to retried start ,default never giving up 
+        window: 120s           # how long to wait before deciding if a restart has succeeded, specified as a duration default: decide immediately
+        rollback_config:       # configures how the service should be roll backed in case of a failing update.
+          parallelism: 1       # The number of containers to rollback at a time. If set to 0, all containers rollback simultaneously.
+          delay: 2             #  The time to wait between each container group's rollback (default 0s)
+          failure_action: continue #pause, default pause. What to do if a rollback fails.
+          monitor: 4s          # Duration after each task update to monitor for failure (ns|us|ms|s|m|h) default 0s
+          max_failure_ratio: 0 # Failure rate to tolerate during a rollback default 0.
+          order: stop-first    # Order of operations during rollbacks. One of stop-first (old task is stopped before starting new one), 
+                               # or start-first (new task is started first and the running tasks briefly overlap) default stop-first.
+        update_config:
+          parallelism: 3
+          delay: 2s
+          failure_action: continue #rollback, pause default pause
+          monitor: 0s
+          max_failure_ratio: 2
+          order: stop-first
+          ## not supported for stack deploy or the deploy key: build, cgroup_parent, container_name, devices, tmpfs, external_links, 
+          ## links, network_mode, restart, specurity_opt, stop_signal, sysctls, userns_mode
+      devices:                 # List of device mappings.
+        - "/dev/ttyUSB0:/dev/ttyUSB0"
+      depends_on:
+        - db
+        - redis
+      dns:
+        - 8.8.8.8
+        - 1.1.1.1
+      dns_search:
+        - bdp.dev.com
+      tmpfs:
+        - /run
+        - /tmp
+      entrypoint: 
+        - /code/entrypoint.sh
+        - php
+        - -d
+      env_file:
+        - .env
+      environment:
+        SHOW: 'true'
+      expose:
+        - "3000"
+        - "8800"
+      external_links:          # link to containers started outside this .yml or even outside of compose
+        - mysql:mysql
+      extra_hosts:             # add hostname mappings
+        - "dst:10.118.10.110"
+      helthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost"]
+        interval: 1m30s
+        timeout: 10s
+        retries: 3
+        start_period: 40s
+      init: true               # version 2.2 /usr/libexec/docker-init
+      isolation: default       # default only on linux, windows default process hyperv
+      labels:
+        - com.bdp.map: "Fkkkk"
+      logging:
+        driver: syslog         # json-file, syslog, none; default is syslog
+        options:
+          syslog-address: "tcp://ip:port"
+          # max-size: "200k" # for json-file
+          # max-file: "10"   # for json-file
+      network_mode: "bridge"   # Network mode, including bridge, host, none, service:[service name], container: [container name/id]
+      networks:
+        some-service:
+          networks:
+            network1:
+              aliases:
+                - alias1
+                - alias2
+            - network2
+      ports:
+        - "9090-9091:8080-8081"
+      # ports:
+      #   - target: 80          # the port inside the container
+      #     published: 8080     # the publicly exposed port
+      #     protocol: tcp       # the port protocol (tcp or upd)
+      #     mode: host          # host for publishing a hos port on each node, or ingress for a swarm mode port to be load balanced.
+
+
+      mode: replicated    # default replicated a speciafied number of containers, global: exactly one container per swarm node
+      endpoint_mode: vip  # vip: docker assigns the service a virtual IP (VIP) that acts as the "front end" for clients
+                          # to reach the service on a network.  default mode; dnsrr: DNS round-robin service discovery does not use a single virtual IP.
+      labels:
+        com.bdp.map: "This lable will appear on the web service"
+      placement: # specify placement of constraints and preferences
+        constraints:
+          - node.role == manager
+          - engine.labels.operatingsystem == ubuntu 14.04
+        preferences:
+          - spread: node.labels.zone
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 50M
+        reservations:
+          cpus: '0.25'
+          memory: 20M
+
+    secrets:
+      - my_secret
+      - my_other_secret
+    #  - source: my_secret
+    #    target: redis_secret
+    #    uid: '1000'
+    #    gid: '1001'
+    #    mode: 0440
+    security_opt:               # ignored when deploying a stack in swarm mode
+      - label:user:USER
+      - label:role:ROLE
+    stop_grace_period: 1m30s    # specify how long to wait when attemping to stop a container if it doesn't handle SIGTERM 
+                                # (or whatever stop signal has been specified with stop_signal), before sending SIGKILL.
+    stop_signal: SIGUSR1        # Sets an alternative signal to stop the container, default SIGTERM, SSMI (stack swarm mode ignored)
+    sysctls:                    # SSMI
+      net.core.somaxconn: 1024
+      net.ipv4.tcp_syncookies: 0
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 20000
+        hard: 40000
+    userns_mode: "host"         # SSMI, Disables the user namespace for this service, if DOcker daemon is configured with user namespaces
+    volumes:
+                                # consistent: full consistency. consistency. The container runtime and the hos maintain an identical view of the mount at all times. default
+                                # cached: The host's view of the mount is authoritative. There may be delays before updates made on the host are visible within a container
+                                # delegated: the container runtime's view of the mount is authoritative. There may be delays before updates made in a container are visible on the host.
+      - /var/lib/mysql:var/lib/mysql:cached
+      - /var/lib/mysql
+      - ~/configs:/etc/configs/:ro
+    #  - type: volume
+    #    source: mydata
+    #    target: /data
+    #    volumes:
+    #      nocopy: true
+    #  - type: bind
+    #    source: ./static
+    #    target: /opt/app/static
+    restart: always             # no, always on-failure unless-stopped
+    user: deploy
+    working_dir: /app
+    domainname: foo.com
+    hostname: deploy
+    ipc: host
+    mac_address: 01:42:ac:11:65:43
+    privileged: ture
+    read_only: true
+    shm_size: 64M
+    stdin_open: true
+    tty: true
+
+    cap_add:
+      - ALL
+    cap_drop:
+      - NET_ADMIN
+      - SYS_ADMIN
+    command: bundle exec thin -p 3000 # command:["bundle", "exec", "thin", "-p", "3000"]
+    #shout syntax: 
+    #configs:
+    #  - my_config
+    #  - my_other_config
+
+    #long syntax:
+    configs:
+      - source: my_config
+        target: /redis_config
+        uid: '1000'
+        gid: '1001'
+        mode: 0440
+    cgroup_parent: m-executor-abcd # specify an optional parent cgroup for the container. This option is ignored when deploying a stack in swarm mode with a compose file.
+    container_name: my-web-container # container name, this option is ignored when use swarm mode
+    credential_spec: #added in V3.3, This option is only used for services using Windoes containers
+      file: c:\ProgramData\Docker\my.json
+
+
+
+configs:
+  my_config:
+    file: ./my_config.properties
+  my_other_config:
+    external: true
+secrets:
+  my_secret:
+    file: ./mysecret.txt
+  my_other_secret:
+    external: true
+volumes:
+  mydata:
+    driver: foobar
+    driver_opts:
+      foo: "bar"
+      baz: 1
+    labels:
+      com.example.description: "database volume"
+      department: "it/ops"
+    name: my_app_data
+networks:
+  my-own-net:
+    external: true
+    name: host
+    driver_opts:
+      foo: "bar"
+      baz: 1
+    attachable: true            # only when driver is set to overlay
+    driver: overlay             # bridge, overlay, host, none
+    ipam:
+      driver: default           # Custom IPAM driver, instead of  the default
+      config:                   # A list with zero or more config blocks, each containing any of the following keys: subnet 
+        - subnet: 172.28.0.0/16

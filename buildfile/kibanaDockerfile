@@ -1,0 +1,22 @@
+FROM openjdk:8
+
+MAINTAINER gaoge gaoge@mail.com.cn
+
+RUN groupadd -g 1001 deploy \
+    && useradd -u 1000 --create-home --shell /bin/bash --no-user-group deploy \
+    && usermod -g deploy deploy
+
+WORKDIR /app
+
+ADD kibana-6.4.0-linux-x86_64.tar.gz /app
+COPY etc/sudoers /etc/sudoers
+COPY etc/kibana/kibana.yml /app/kibana-6.4.0-linux-x86_64/config
+RUN ln -sf /app/kibana-6.4.0-linux-x86_64 /app/kibana \
+ && chown -R deploy:deploy /app/kibana/config /app/kibana/bin 
+ENV KIBANA_HOME /app/kibana
+ENV KIBANA_HOST localhost
+ENV KIBANA_PORT 5601
+ENV ES_HOST localhost:9200
+ENV PATH $KIBANA_HOME/bin:$PATH
+USER deploy
+ENTRYPOINT ["/app/kibana/bin/kibana"]

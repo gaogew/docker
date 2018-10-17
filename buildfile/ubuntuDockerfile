@@ -1,0 +1,14 @@
+FROM openjdk
+
+MAINTAINER gaoge gaoge@mail.com.cn
+
+COPY sources.list /etc/apt/sources.list
+
+RUN apt update -y 
+# && apt upgrade -y && apt install -y openssh-server openssh-client openssh-sftp-server xauth ncurses-term
+RUN ssh-keygen -t rsa -f /etc/ssh/ssh_host_rsa_key -N ''
+RUN mkdir /app
+ADD hadoop-3.1.1.tar.gz /app
+# RUN cd /app && tar -xzf hadoop-3.1.1.tar.gz
+
+ENTRYPOINT ["/usr/sbin/sshd", "-D"]

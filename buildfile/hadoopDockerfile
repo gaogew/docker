@@ -1,0 +1,39 @@
+ARG JAVA=/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.181-3.b13.el7_5.x86_64
+FROM centos
+
+MAINTAINER gaoge gaoge@mail.com.cn
+
+RUN groupadd -g 1001 deploy \
+    && useradd -u 1000 --create-home --shell /bin/bash --no-user-group deploy \
+    && usermod -g deploy deploy
+
+RUN yum update -y  && yum upgrade -y && yum install -y \
+openssh-server openssh-clients openssh-sftp-server xauth ncurses-term \
+ java-1.8.0-openjdk \
+ java-1.8.0-openjdk-devel \
+ sudo snappy openssl openssl-static protobuf cmake libtool \ 
+ && ssh-keygen -t rsa -f /etc/ssh/ssh_host_rsa_key -N '' \ 
+ && mkdir /home/deploy/.ssh 
+# RUN mkdir /app
+WORKDIR /app
+
+ADD hadoop-3.1.1.tar.gz /app
+COPY etc/ssh/* /home/deploy/.ssh/
+COPY etc/hadoop/* /app/hadoop-3.1.1/etc/hadoop/
+COPY etc/sudoers /etc/sudoers
+
+RUN chown -R deploy:deploy /home/deploy/.ssh \
+ && chmod 400 -R /home/deploy/.ssh/* \
+ && chmod 700 -R /home/deploy/.ssh/authorized_keys \
+ && chown -R deploy:deploy /app/hadoop-3.1.1/etc/* \
+ && chown deploy:deploy /app
+# RUN chown -R deploy:deploy /app/hadoop-3.1.1
+# RUN /usr/sbin/sshd -E /tmp/sshd.log
+# USER deploy
+# ENTRYPOINT ["/start.sh"]
+ENV JAVA_HOME /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.181-3.b13.el7_5.x86_64
+ENV HADOOP_HOME /app/hadoop-3.1.1
+ENV PATH $JAVA_HOME/bin:$HADOOP_HOME/bin:$PATH
+# ENTRYPOINT ["/app/hadoop-3.1.1/sbin/start-dfs.sh"]
+# USER root
+ENTRYPOINT ["/usr/sbin/sshd", "-D"]
